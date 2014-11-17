@@ -1,0 +1,299 @@
+/**
+ * First, let's create a few global utility functions
+ * that will help us out. We will later use this merge function for 
+ * left joining tables
+ */
+describe('Utility functions', function () {
+  it('should have an object merge function', function () {
+    var obj1 = {a: 1};
+    var obj2 = {b: 2};
+    var obj3 = {};
+    obj3 = merge(obj3, obj2);
+    obj3 = merge(obj3, obj1);
+    expect(obj3).toEqual({a:1, b:2});
+  });
+});
+
+
+/**
+ * We'll create a functional query language similar to SQL
+ * Called FQL
+ * We've already populated three large JS arrays that will
+ * act as our "tables".  If you check 0_movies.js you'll see:
+ * movies, actors and roles as large JS arrays
+ * 
+ */
+describe('Functional Query Language', function () {
+
+  /**
+   * Read in the movies JS Array
+   *  and store the data somewhere inside the new FQL object.  
+   */
+  var moviesTable;
+
+  beforeEach(function() {
+    moviesTable = new FQL(movies);
+  });
+
+  /**
+   * Should have an exec() function that returns the
+   * current internal data set of the FQL class
+   */
+  it('should have an exec function', function () {
+    var all_movies = moviesTable.exec();
+    expect(all_movies).toEqual(movies);
+  });
+
+  it('should have a count method', function () {
+    // count() returns how many records are in the movies array
+    // check 0_movies.js for the data set
+    // 
+    // There are 36 movies in the movies Array
+    expect(moviesTable.count()).toEqual(36);
+  });
+
+  /**
+   * Should have a limit(X) method that will 
+   *  cut out the first X rows.  count() should 
+   *  then show only those rows.
+   */
+  it('should have a limit() method', function () {
+    expect(moviesTable.limit(5).count()).toEqual(5);
+  });
+
+  /**
+   * The exec() function should returns the
+   * current result of the chained query
+   */
+  it('should limit and have chained exec function', function () {
+    // this will return the first movie row, Aliens
+    var first_movie = moviesTable.limit(1).exec();
+    expect(first_movie.length).toEqual(1);
+    expect(first_movie[0].name).toEqual("Aliens");
+  });
+
+  /** 
+   * Should have a where(truthFunction) method that
+   * will select rows of the table where the function
+   * returns true - similar to Array#filter
+   *
+   * this would be similar to 
+   * SELECT * FROM movies WHERE name = "Shrek"
+   */
+  it('should support where queries', function() {
+    var results = moviesTable.where(function(row) {
+      return row.name == "Shrek";
+    }).exec();
+    // results should look like this:
+    // [{"id":300229,"name":"Shrek","year":2001,"rank":8.1}] 
+    expect(results[0].year).toEqual(2001);
+    expect(results[0].id).toEqual(300229);
+  });
+
+  /** 
+   * where queries can return more than 1 row
+   *
+   * SELECT * FROM movies where year = 2001;
+   */
+  it('should support where queries that return multiple rows', function () {
+    var results = moviesTable.where(function(row) {
+      return row.year === 2001;
+    }).exec();
+    var expectedResults = [{"id":238072,"name":"Ocean's Eleven","year":2001,"rank":7.5},{"id":300229,"name":"Shrek","year":2001,"rank":8.1},{"id":350424,"name":"Vanilla Sky","year":2001,"rank":6.9}];
+    expect(results).toEqual(expectedResults);    
+  });
+
+
+  /**
+   * where queries can be grouped together
+   *
+   * SELECT * FROM movies WHERE year = 2001 and rank > 8;
+   */
+  it('should support multiple where queries that return multiple rows', function () {
+    var results = moviesTable
+                    .where(function(row) {
+                      return row.year === 2001;
+                    })
+                    .where(function(row) {
+                      return row.rank > 8;
+                    })
+                    .exec();
+    // console.log(JSON.stringify(results));
+    var expectedResults = [{"id":300229,"name":"Shrek","year":2001,"rank":8.1}];    expect(results).toEqual(expectedResults);    
+    expect(results).toEqual(expectedResults);
+  });
+  
+  /** 
+   * FQL.select(keysArray) can limit which values come back in the query
+   * SELECT id, name FROM movies WHERE rank > 8;
+   */
+  it('should support select() queries that limit which values come back', function () {
+    var results = moviesTable
+                    .where(function(row) {
+                      return row.rank > 8;
+                    })
+                    .select(["id", "name"])
+                    .limit(3)
+                    .exec();
+    var expectedResults = [{"id":10920,"name":"Aliens"},{"id":46169,"name":"Braveheart"},{"id":109093,"name":"Fargo"}];
+    expect(results).toEqual(expectedResults);
+  });
+
+});
+
+/**
+  These are a bit more difficult.                                                                      
+ */
+
+describe('Functional Query Language - Level 2', function () {
+
+  var moviesTable;
+
+  beforeEach(function() {
+    moviesTable = new FQL(movies);
+  });
+
+  /** 
+   * Similar to LEFT OUTER JOIN in SQL, this combines on FQL data set with another
+   * Let's see if we can see how many roles were in the movie Hollow Man
+   *
+   * FQL.left_join takes two parameters, first a new FQL data set, and secondly
+   * a function that returns true if you want to combine the right data set with the left
+   * data set
+   *
+   * It's an outer join because every row in the left data set can be combined with multiple 
+   * rows in the right data set (the joined data set)
+   */
+  it('should support left outer joining the results with a limit', function () {
+    var rolesTable = new FQL(roles);
+
+    var results = moviesTable
+                    .where(function(row) {
+                      return row.rank !== null;
+                    })
+                    .order('rank')
+                    .limit(1) // this should give us Hollow Man, the lowest ranked movie
+                    .left_join(rolesTable, function(movie_row, role_row) {
+                      return movie_row.id === role_row.movie_id;
+                    })
+                    .limit(2)
+                    .exec();
+
+    // First 2 roles in the movie
+    // you can verify this be search in the roles array for anything with movie_id === 147603
+    var expectedResults = [
+      {"id":147603,"name":"Hollow Man","year":2000,"rank":5.3,"actor_id":9184,"movie_id":147603,"role":"Dad"},
+      {"id":147603,"name":"Hollow Man","year":2000,"rank":5.3,"actor_id":22591,"movie_id":147603,"role":"Sebastian Caine"}] ;
+    expect(results).toEqual(expectedResults);
+  });
+
+  it('should support left outer joining the results with a count', function () {
+    var rolesTable = new FQL(roles);
+
+    var results = moviesTable
+                    .where(function(row) {
+                      return row.rank !== null;
+                    })
+                    .order('rank')
+                    .limit(1) // this should give us Hollow Man, the lowest ranked movie
+                    .left_join(rolesTable, function(movie_row, role_row) {
+                      return movie_row.id === role_row.movie_id;
+                    })
+                    .count();
+    // 21 roles were in the movie
+    // you can verify this be search in the roles array for anything with movie_id === 147603
+    expect(results).toEqual(21);
+  });
+
+  /**
+   * A double left join!  Let's get the actors in the movie
+   */
+  it('should support double left outer joining the results', function () {
+    var rolesTable = new FQL(roles);
+    var actorsTable = new FQL(actors);
+
+    var results = moviesTable
+                    .where(function(row) {
+                      return row.rank !== null;
+                    })
+                    .order('rank')
+                    .limit(1) // this should give us Hollow Man, the lowest ranked movie
+                    .left_join(rolesTable, function(movie_row, role_row) {
+                      return movie_row.id === role_row.movie_id;
+                    })
+                    .left_join(actorsTable, function(movie_role_row, actor_row) {
+                      return movie_role_row.actor_id === actor_row.id;
+                    })
+                    .select(["name", "first_name", "last_name", "role"])
+                    .limit(3)
+                    .exec();
+    // console.log(JSON.stringify(results));
+    var expectedResults = [
+        {"name":"Hollow Man","first_name":"Steve","last_name":"Altes","role":"Dad"},
+        {"name":"Hollow Man","first_name":"Kevin","last_name":"Bacon","role":"Sebastian Caine"},
+        {"name":"Hollow Man","first_name":"Josh","last_name":"Brolin","role":"Matthew Kensington"}];
+    expect(results).toEqual(expectedResults);
+  });
+
+
+  /** 
+   * Similar to ORDER in SQL, order the results coming back from your data set
+   * your order function takes a column but then needs to sort your internal data set
+   * Refer to https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort
+   * on how to implement custom sort functions
+   */
+  it('should support ordering the results', function () {
+    var results = moviesTable
+                    .where(function(row) {
+                      return row.rank !== null;
+                    })
+                    .order('rank')
+                    .limit(3)
+                    .exec();
+    // the three lowest ranked movies in our data set
+    var expectedResults = [
+      {"id":147603,"name":"Hollow Man","year":2000,"rank":5.3},
+      {"id":116907,"name":"Footloose","year":1984,"rank":5.8},
+      {"id":344203,"name":"UHF","year":1989,"rank":6.6}] ;
+    expect(results).toEqual(expectedResults);
+  });
+});
+
+describe('Functional Query Language - Indexing', function () {
+
+  var moviesTable;
+
+  beforeEach(function() {
+    moviesTable = new FQL(movies);
+  });
+
+
+  /**
+   * Let's add an indexing function to the movies table.
+   *
+   * For this example, an index should be a JS Object {} where the key is the value, and the values are an array
+   * of rows where that data exists.
+   */
+  it('should support a function to add an index to the FQL class', function() {
+    moviesTable.addIndex('name');
+    expect(moviesTable.indices['name']['Apollo 13']).toEqual([2]);
+  });
+
+
+  /**
+   * Let's add an index to the actors table for the last_name field
+   *
+   * If you look at the actors table, you'll see that the 14th, 15th and 16th row have an actor named Allison.
+   *
+   * You can verify this with something like: actors.forEach(function(el, i) { if(el.last_name == 'Allison') { console.log(i) } })
+   */
+  it('should support indexing a value that exists in multiple rows', function() {
+    var actorsTable = new FQL(actors);
+    actorsTable.addIndex('last_name');
+    expect(actorsTable.indices['last_name']['Allison']).toEqual([14, 15, 16]);
+  });
+
+});
+
+
+
