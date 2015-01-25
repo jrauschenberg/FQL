@@ -81,13 +81,25 @@ describe('Functional Query Language', function () {
    * SELECT * FROM movies WHERE name = "Shrek"
    */
   it('should support where queries', function() {
-    var results = moviesTable.where(function(row) {
-      return row.name == "Shrek";
-    }).exec();
+    var results = moviesTable.where({name: "Shrek"}).exec();
     // results should look like this:
     // [{"id":300229,"name":"Shrek","year":2001,"rank":8.1}] 
     expect(results[0].year).toEqual(2001);
     expect(results[0].id).toEqual(300229);
+  });
+
+  /**
+   * where quries can specify a function
+   * instead of a value for any given field
+   */
+  it('should support predicates in where queries', function() {
+    var results = moviesTable
+                    .where({year: function(v) {
+                      return v > 2000;
+                    }})
+                    .exec();
+
+    expect(results.length).toEqual(10);
   });
 
   /** 
@@ -96,9 +108,7 @@ describe('Functional Query Language', function () {
    * SELECT * FROM movies where year = 2001;
    */
   it('should support where queries that return multiple rows', function () {
-    var results = moviesTable.where(function(row) {
-      return row.year === 2001;
-    }).exec();
+    var results = moviesTable.where({year: 2001}).exec();
     var expectedResults = [{"id":238072,"name":"Ocean's Eleven","year":2001,"rank":7.5},{"id":300229,"name":"Shrek","year":2001,"rank":8.1},{"id":350424,"name":"Vanilla Sky","year":2001,"rank":6.9}];
     expect(results).toEqual(expectedResults);    
   });
@@ -111,11 +121,9 @@ describe('Functional Query Language', function () {
    */
   it('should support multiple where queries that return multiple rows', function () {
     var results = moviesTable
-                    .where(function(row) {
-                      return row.year === 2001;
-                    })
-                    .where(function(row) {
-                      return row.rank > 8;
+                    .where({
+                      year: 2001,
+                      rank: function (v) {return v > 8;}
                     })
                     .exec();
     // console.log(JSON.stringify(results));
@@ -129,9 +137,7 @@ describe('Functional Query Language', function () {
    */
   it('should support select() queries that limit which values come back', function () {
     var results = moviesTable
-                    .where(function(row) {
-                      return row.rank > 8;
-                    })
+                    .where({rank: function (v) {return v > 8;}})
                     .select(["id", "name"])
                     .limit(3)
                     .exec();
@@ -168,9 +174,7 @@ describe('Functional Query Language - Level 2', function () {
     var rolesTable = new FQL(roles);
 
     var results = moviesTable
-                    .where(function(row) {
-                      return row.rank !== null;
-                    })
+                    .where({rank: function(v) {return v !== null;}})
                     .order('rank')
                     .limit(1) // this should give us Hollow Man, the lowest ranked movie
                     .left_join(rolesTable, function(movie_row, role_row) {
@@ -191,9 +195,7 @@ describe('Functional Query Language - Level 2', function () {
     var rolesTable = new FQL(roles);
 
     var results = moviesTable
-                    .where(function(row) {
-                      return row.rank !== null;
-                    })
+                    .where({rank: function(v) {return v !== null;}})
                     .order('rank')
                     .limit(1) // this should give us Hollow Man, the lowest ranked movie
                     .left_join(rolesTable, function(movie_row, role_row) {
@@ -213,9 +215,7 @@ describe('Functional Query Language - Level 2', function () {
     var actorsTable = new FQL(actors);
 
     var results = moviesTable
-                    .where(function(row) {
-                      return row.rank !== null;
-                    })
+                    .where({rank: function(v) {return v !== null;}})
                     .order('rank')
                     .limit(1) // this should give us Hollow Man, the lowest ranked movie
                     .left_join(rolesTable, function(movie_row, role_row) {
@@ -244,9 +244,7 @@ describe('Functional Query Language - Level 2', function () {
    */
   it('should support ordering the results', function () {
     var results = moviesTable
-                    .where(function(row) {
-                      return row.rank !== null;
-                    })
+                    .where({rank: function(v) {return v !== null;}})
                     .order('rank')
                     .limit(3)
                     .exec();
@@ -261,22 +259,37 @@ describe('Functional Query Language - Level 2', function () {
 
 describe('Functional Query Language - Indexing', function () {
 
-  var moviesTable;
+  var moviesTable, actorsTable, rolesTable;
 
   beforeEach(function() {
     moviesTable = new FQL(movies);
+    actorsTable = new FQL(actors);
+    rolesTable = new FQL(roles);
   });
 
 
   /**
    * Let's add an indexing function to the movies table.
+   * 
+   * Think of an index table as a kind of reverse look up table: 
+   * the keys are entry values (e.g. 'Shrek'), and the values are 
+   * the indices of those entry values (e.g. 4).
    *
-   * For this example, an index should be a JS Object {} where the key is the value, and the values are an array
-   * of rows where that data exists.
+   * When a row gets indexed (but not before), you should construct 
+   * and store an index table for that row name. You will need to 
+   * loop through all the entries for that row.
+   *
+   * Remember, though, that entry values are not necessarily 
+   * unique. For example, the gender row in the actors table--there 
+   * are many indices with gender 'M'. So make sure to store the 
+   * indices as an array of numbers.
    */
   it('should support a function to add an index to the FQL class', function() {
+    // it should not be possible to look up the index of an entry
+    // in a row prior to `addIndex` on that row
+    expect( moviesTable.getIndicesOf('name', 'Apollo 13') ).toEqual( undefined );
     moviesTable.addIndex('name');
-    expect(moviesTable.indices['name']['Apollo 13']).toEqual([2]);
+    expect( moviesTable.getIndicesOf('name', 'Apollo 13') ).toEqual( [2] );
   });
 
 
@@ -288,9 +301,46 @@ describe('Functional Query Language - Indexing', function () {
    * You can verify this with something like: actors.forEach(function(el, i) { if(el.last_name == 'Allison') { console.log(i) } })
    */
   it('should support indexing a value that exists in multiple rows', function() {
-    var actorsTable = new FQL(actors);
+    
     actorsTable.addIndex('last_name');
-    expect(actorsTable.indices['last_name']['Allison']).toEqual([14, 15, 16]);
+    expect( actorsTable.getIndicesOf('last_name', 'Allison') ).toEqual( [14, 15, 16] );
+  });
+
+
+  /**
+   * Indices are only useful because they allow you to retrieve data 
+   * faster than naive searching.
+   *
+   * Once a field is indexed, where queries on that field should make
+   * use of that index. Instead of naively searching through all data, 
+   * the where should simply reach into the indices and pluck those 
+   * out of the data.
+   */
+  it('should use available indices during where queries', function() {
+    actorsTable.addIndex('last_name');
+
+    spyOn(actorsTable, 'getIndicesOf').andCallThrough();
+    var results = actorsTable.where({last_name: "Russell"}).exec();
+    expect( results.length ).toEqual( 4 );
+    expect( actorsTable.getIndicesOf ).toHaveBeenCalledWith( 'last_name', 'Russell' );
+  });
+
+  it('should produce the same query results with significantly faster look up times', function() {
+    console.time('Without index');
+    for (var timesToRun = 1000; timesToRun--;) {
+      var noIndexResults = rolesTable.where({movie_id: 30959}).exec();
+    }
+    console.timeEnd('Without index');
+
+    rolesTable.addIndex('movie_id');
+
+    console.time('With index');
+    for (var timesToRun = 1000; timesToRun--;) {
+      var indexResults = rolesTable.where({movie_id: 30959}).exec();
+    }
+    console.timeEnd('With index');
+
+    expect( noIndexResults ).toEqual( indexResults );
   });
 
 });
