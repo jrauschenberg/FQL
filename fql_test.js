@@ -159,7 +159,7 @@ describe('Functional Query Language', function () {
                     .where({year: 2000})
                     .order('rank')
                     .exec();
-    var expectedResults = [];
+    var expectedResults = [ { id : 147603, name : 'Hollow Man', year : 2000, rank : 5.3 }, { id : 237431, name : 'O Brother, Where Art Thou?', year : 2000, rank : 7.8 }, { id : 306032, name : 'Snatch.', year : 2000, rank : 7.9 }, { id : 210511, name : 'Memento', year : 2000, rank : 8.7 } ];
     expect(results).toEqual(expectedResults);
   });
 
