@@ -145,6 +145,24 @@ describe('Functional Query Language', function () {
     expect(results).toEqual(expectedResults);
   });
 
+  /*
+   * FQL.order() should simply take a column and re-order 
+   * the data in ascending order based on each row's value 
+   * for that column
+   * 
+   * If you don't already know, JavaScript's native sort can 
+   * take a comparator function as a parameter. Read more about 
+   * it here: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort
+   */
+  it('should support order queries that sort by a given row', function () {
+    var results = moviesTable
+                    .where({year: 2000})
+                    .order('rank')
+                    .exec();
+    var expectedResults = [];
+    expect(results).toEqual(expectedResults);
+  });
+
 });
 
 /**
