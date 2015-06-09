@@ -72,6 +72,12 @@ describe('Functional Query Language', function () {
     expect(first_movie[0].name).toEqual("Aliens");
   });
 
+  it('should reset to original data after exec', function () {
+    moviesTable.limit(1).exec();
+    var all_movies = moviesTable.exec();
+    expect(all_movies).toEqual(movies);
+  });
+
   /** 
    * Should have a where(truthFunction) method that
    * will select rows of the table where the function
@@ -126,7 +132,6 @@ describe('Functional Query Language', function () {
                       rank: function (v) {return v > 8;}
                     })
                     .exec();
-    // console.log(JSON.stringify(results));
     var expectedResults = [{"id":300229,"name":"Shrek","year":2001,"rank":8.1}];    expect(results).toEqual(expectedResults);    
     expect(results).toEqual(expectedResults);
   });
@@ -145,22 +150,36 @@ describe('Functional Query Language', function () {
     expect(results).toEqual(expectedResults);
   });
 
-  /*
+  /** 
    * FQL.order() should simply take a column and re-order 
    * the data in ascending order based on each row's value 
-   * for that column
-   * 
-   * If you don't already know, JavaScript's native sort can 
-   * take a comparator function as a parameter. Read more about 
-   * it here: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort
+   * for that column.
+   *
+   * Refer to https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort
+   * on how to implement custom sort functions
    */
   it('should support order queries that sort by a given row', function () {
     var results = moviesTable
-                    .where({year: 2000})
+                    .where({rank: function (v) { return v !== null; }})
                     .order('rank')
+                    .limit(3)
                     .exec();
-    var expectedResults = [ { id : 147603, name : 'Hollow Man', year : 2000, rank : 5.3 }, { id : 237431, name : 'O Brother, Where Art Thou?', year : 2000, rank : 7.8 }, { id : 306032, name : 'Snatch.', year : 2000, rank : 7.9 }, { id : 210511, name : 'Memento', year : 2000, rank : 8.7 } ];
+    var expectedResults = [ { id: 147603, name: 'Hollow Man', year: 2000, rank: 5.3 }, { id: 116907, name: 'Footloose', year: 1984, rank: 5.8 }, { id: 344203, name: 'UHF', year: 1989, rank: 6.6 } ];
     expect(results).toEqual(expectedResults);
+  });
+
+  it('ordering should not change the order for subsequent queries', function () {
+    var resultsA = moviesTable
+                    .where({year: 1999})
+                    .order('rank')
+                    .limit(1)
+                    .exec();
+    var resultsB = moviesTable
+                    .where({year: 1999})
+                    .limit(1)
+                    .exec();
+    expect(resultsA).toEqual([ { id: 314965, name: 'Stir of Echoes', year: 1999, rank: 7 } ]);
+    expect(resultsB).toEqual([ { id: 112290, name: 'Fight Club', year: 1999, rank: 8.5 } ]);
   });
 
 });
@@ -245,7 +264,6 @@ describe('Functional Query Language - Level 2', function () {
                     .select(["name", "first_name", "last_name", "role"])
                     .limit(3)
                     .exec();
-    // console.log(JSON.stringify(results));
     var expectedResults = [
         {"name":"Hollow Man","first_name":"Steve","last_name":"Altes","role":"Dad"},
         {"name":"Hollow Man","first_name":"Kevin","last_name":"Bacon","role":"Sebastian Caine"},
@@ -253,26 +271,6 @@ describe('Functional Query Language - Level 2', function () {
     expect(results).toEqual(expectedResults);
   });
 
-
-  /** 
-   * Similar to ORDER in SQL, order the results coming back from your data set
-   * your order function takes a column but then needs to sort your internal data set
-   * Refer to https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort
-   * on how to implement custom sort functions
-   */
-  it('should support ordering the results', function () {
-    var results = moviesTable
-                    .where({rank: function(v) {return v !== null;}})
-                    .order('rank')
-                    .limit(3)
-                    .exec();
-    // the three lowest ranked movies in our data set
-    var expectedResults = [
-      {"id":147603,"name":"Hollow Man","year":2000,"rank":5.3},
-      {"id":116907,"name":"Footloose","year":1984,"rank":5.8},
-      {"id":344203,"name":"UHF","year":1989,"rank":6.6}] ;
-    expect(results).toEqual(expectedResults);
-  });
 });
 
 describe('Functional Query Language - Indexing', function () {

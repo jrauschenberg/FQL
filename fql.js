@@ -1,9 +1,3 @@
-// Place your code here:
+function merge (obj1, obj2) {}
 
-// Adds properties of obj2 into obj1
-function merge(obj1, obj2) {
-}
-
-
-var FQL = function(data) {
-};
+function FQL () {}
